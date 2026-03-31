@@ -119,3 +119,14 @@ All mkcd tests passed.
 ```bash
 rm -f "$HOME/.local/share/mkcd/mkcd.zsh"
 ```
+
+## Troubleshooting
+
+If `mkcd` still behaves like an old version, check where it is loading from:
+
+```zsh
+whence -v mkcd
+```
+
+If it shows `~/.zsh/functions/mkcd.zsh`, that legacy autoload path is taking precedence.
+Re-run the installer with `--force`; it now updates that file too.

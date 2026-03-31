@@ -96,6 +96,7 @@ fi
 
 mkdir -p "$PREFIX"
 TARGET_FILE="$PREFIX/mkcd.zsh"
+LEGACY_ZSH_FUNC="$HOME/.zsh/functions/mkcd.zsh"
 
 if [[ -f "$TARGET_FILE" && "$FORCE" -ne 1 ]]; then
   echo "info: $TARGET_FILE already exists (use --force to overwrite)"
@@ -103,6 +104,14 @@ else
   cp "$SOURCE_FILE" "$TARGET_FILE"
   chmod 0644 "$TARGET_FILE"
   echo "installed: $TARGET_FILE"
+fi
+
+# If a legacy autoloaded function exists at ~/.zsh/functions/mkcd.zsh, keep it in sync.
+# That location can override the rc-sourced install and cause stale behavior.
+if [[ -f "$LEGACY_ZSH_FUNC" ]]; then
+  cp "$SOURCE_FILE" "$LEGACY_ZSH_FUNC"
+  chmod 0644 "$LEGACY_ZSH_FUNC"
+  echo "updated legacy zsh function: $LEGACY_ZSH_FUNC"
 fi
 
 SOURCE_LINE="[ -f \"$TARGET_FILE\" ] && source \"$TARGET_FILE\""
