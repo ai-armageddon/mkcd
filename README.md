@@ -1,5 +1,7 @@
 # mkcd
 
+[![CI](https://github.com/ai-armageddon/mkcd/actions/workflows/test.yml/badge.svg)](https://github.com/ai-armageddon/mkcd/actions/workflows/test.yml)
+
 `mkcd` creates brace-expanded directory trees and drops you into a selected branch.
 
 ## What It Does
@@ -22,6 +24,8 @@ it will:
 ## Features
 
 - Works with quoted and unquoted brace paths
+- Brace groups anywhere in a segment, including adjacent groups (`pre{a,b}{1,2}`)
+- Escaped commas inside an option (`{a\,b,c}` creates an `a,b` directory)
 - 1-based index selection per brace level (`2,1`)
 - Empty or `0` index means default (`1`)
   - `,1`
@@ -30,6 +34,11 @@ it will:
 - Optional trailing dot suffix to step up from selected path
   - `..`
   - `../..`
+
+## Limitations
+
+- Nested brace groups (`{a,{b,c}}`) are not supported — use a flat list or separate segments.
+- In quoted mode, zsh range syntax like `{1..3}` is not expanded; use unquoted mode, where zsh expands ranges natively.
 
 ## Requirements
 
@@ -113,7 +122,20 @@ All mkcd tests passed.
 
 ## Uninstall
 
-1. Remove the source line from your shell rc file.
+Run the included uninstaller:
+
+```bash
+./uninstall.sh
+```
+
+It removes the `mkcd` block from your shell rc file, deletes the installed file
+(default prefix: `~/.local/share/mkcd`), and cleans up the legacy autoload path.
+Pass `--yes` to skip the confirmation prompt, or `--skip-rc` to leave rc files
+untouched.
+
+To clean up by hand instead:
+
+1. Remove the `mkcd` source line from your shell rc file.
 2. Delete the installed file (default):
 
 ```bash
