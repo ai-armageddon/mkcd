@@ -93,6 +93,7 @@ SOURCE_LINE="[ -f \"$TARGET_FILE\" ] && source \"$TARGET_FILE\""
 tmp_file=""
 cleanup() {
   [[ -n "$tmp_file" ]] && rm -f "$tmp_file"
+  return 0
 }
 trap cleanup EXIT
 
