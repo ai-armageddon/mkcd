@@ -8,6 +8,8 @@
 #   mkcd path/{a,b}/x/{y,z} 0, 2
 #   mkcd path/{a,b}/x/{y,z} 2,1 ..
 #   mkcd path/{a,b}/x/{y,z} ..
+#   mkcd 'pre{a,b}{1,2}'            # adjacent brace groups (quoted)
+#   mkcd 'esc/{a\,b,c}/x'           # escaped comma in an option
 
 _mkcd_is_dot_suffix() {
   emulate -L zsh
@@ -73,6 +75,71 @@ _mkcd_apply_suffix() {
   fi
 }
 
+_mkcd_expand_segment() {
+  emulate -L zsh
+  setopt localoptions no_shwordsplit
+
+  # Expand one path segment that may contain brace groups anywhere within it.
+  # "pre{a,b}{1,2}" expands to "prea1" "prea2" "preb1" "preb2"; an escaped
+  # comma ("a\,b") inside a group is kept as a literal comma in the name.
+  local seg="$1"
+
+  if [[ "$seg" != *\{*\}* ]]; then
+    reply=("${(Q)seg}")
+    return 0
+  fi
+
+  local -a cur=("")
+  local -a next group_opts
+  local rest="$seg" lit group opt go
+  local -r comma_placeholder="__MKCD_COMMA__"
+
+  while [[ "$rest" == *\{*\}* ]]; do
+    lit="${rest%%\{*}"
+    rest="${rest#*\{}"
+    group="${rest%%\}*}"
+    rest="${rest#*\}}"
+
+    if [[ -n "$lit" ]]; then
+      lit="${(Q)lit}"
+      next=()
+      for opt in "${cur[@]}"; do
+        next+=("$opt$lit")
+      done
+      cur=("${next[@]}")
+    fi
+
+    group="${group//\\,/$comma_placeholder}"
+    group_opts=(${(s:,:)group})
+    group_opts=("${group_opts[@]//$comma_placeholder/,}")
+    group_opts=("${(@Q)group_opts}")
+
+    if (( ${#group_opts} == 0 )); then
+      print -u2 -- "mkcd: empty brace expression in segment '$seg'"
+      return 1
+    fi
+
+    next=()
+    for opt in "${cur[@]}"; do
+      for go in "${group_opts[@]}"; do
+        next+=("$opt$go")
+      done
+    done
+    cur=("${next[@]}")
+  done
+
+  if [[ -n "$rest" ]]; then
+    rest="${(Q)rest}"
+    next=()
+    for opt in "${cur[@]}"; do
+      next+=("$opt$rest")
+    done
+    cur=("${next[@]}")
+  fi
+
+  reply=("${cur[@]}")
+}
+
 _mkcd_from_pattern() {
   emulate -L zsh
   setopt localoptions no_shwordsplit
@@ -98,26 +165,19 @@ _mkcd_from_pattern() {
 
   local brace_level=0
   local out_path=""
-  local part inner idx selected_part
+  local part idx selected_part
   local base opt i
   local -a options
 
   for part in "${parts[@]}"; do
     [[ -z "$part" ]] && continue
 
-    selected_part="${(Q)part}"
-    options=("$selected_part")
+    if ! _mkcd_expand_segment "$part"; then
+      return 1
+    fi
+    options=("${reply[@]}")
 
-    if [[ "$part" == \{*\} ]]; then
-      inner="${part#\{}"
-      inner="${inner%\}}"
-      options=(${(s:,:)inner})
-      options=("${(@Q)options}")
-      if (( ${#options} == 0 )); then
-        print -u2 -- "mkcd: empty brace expression in segment '$part'"
-        return 1
-      fi
-
+    if [[ "$part" == *\{*\}* ]]; then
       (( brace_level += 1 ))
       idx=1
       if (( brace_level <= ${#picks} )) && [[ -n "${picks[brace_level]}" ]]; then
@@ -128,8 +188,9 @@ _mkcd_from_pattern() {
         print -u2 -- "mkcd: index $idx out of range at brace level $brace_level (1..${#options})"
         return 1
       fi
-
       selected_part="${options[idx]}"
+    else
+      selected_part="${options[1]}"
     fi
 
     next_dirs=()
@@ -187,6 +248,21 @@ _mkcd_from_pattern() {
   builtin cd -- "$REPLY"
 }
 
+_mkcd_split_path() {
+  emulate -L zsh
+  setopt localoptions no_shwordsplit
+
+  local -a raw result
+  local seg
+  raw=(${(s:/:)1})
+  result=()
+  for seg in "${raw[@]}"; do
+    [[ -z "$seg" ]] && continue
+    result+=("$seg")
+  done
+  reply=("${result[@]}")
+}
+
 _mkcd_from_expanded() {
   emulate -L zsh
   setopt localoptions no_shwordsplit
@@ -222,14 +298,9 @@ _mkcd_from_expanded() {
   local is_absolute=0
   [[ "$first_path" == /* ]] && is_absolute=1
 
-  local -a raw_parts first_parts
-  raw_parts=(${(s:/:)first_path})
-  local seg
-  first_parts=()
-  for seg in "${raw_parts[@]}"; do
-    [[ -z "$seg" ]] && continue
-    first_parts+=("$seg")
-  done
+  local -a first_parts
+  _mkcd_split_path "$first_path"
+  first_parts=("${reply[@]}")
 
   local seg_count=${#first_parts}
   local -a varying_positions
@@ -242,12 +313,8 @@ _mkcd_from_expanded() {
     seen_vals=()
 
     for p in "${expanded_dirs[@]}"; do
-      raw_parts=(${(s:/:)p})
-      path_parts=()
-      for seg in "${raw_parts[@]}"; do
-        [[ -z "$seg" ]] && continue
-        path_parts+=("$seg")
-      done
+      _mkcd_split_path "$p"
+      path_parts=("${reply[@]}")
 
       if (( ${#path_parts} != seg_count )); then
         print -u2 -- "mkcd: cannot infer indexes from expanded input with inconsistent path depth"
@@ -278,12 +345,8 @@ _mkcd_from_expanded() {
     seen_vals=()
 
     for p in "${expanded_dirs[@]}"; do
-      raw_parts=(${(s:/:)p})
-      path_parts=()
-      for seg in "${raw_parts[@]}"; do
-        [[ -z "$seg" ]] && continue
-        path_parts+=("$seg")
-      done
+      _mkcd_split_path "$p"
+      path_parts=("${reply[@]}")
 
       path_val="${path_parts[pos]}"
       if [[ -z "${seen_vals[$path_val]-}" ]]; then

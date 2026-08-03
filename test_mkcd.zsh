@@ -97,4 +97,55 @@ cd "$tmp_dir"
 mkcd test8/{a,b}/ok/{first,second} ..
 assert_eq "$PWD" "$tmp_dir/test8/a/ok"
 
+# Test 12: adjacent brace groups in a single segment expand as a cartesian product.
+cd "$tmp_dir"
+mkcd 'adj/{a,b}{1,2}'
+assert_dir "$tmp_dir/adj/a1"
+assert_dir "$tmp_dir/adj/a2"
+assert_dir "$tmp_dir/adj/b1"
+assert_dir "$tmp_dir/adj/b2"
+assert_eq "$PWD" "$tmp_dir/adj/a1"
+
+# Test 13: mid-segment braces expand instead of creating a literal dir.
+cd "$tmp_dir"
+mkcd 'mid/pre{a,b}'
+assert_dir "$tmp_dir/mid/prea"
+assert_dir "$tmp_dir/mid/preb"
+assert_eq "$PWD" "$tmp_dir/mid/prea"
+
+# Test 14: index selection applies to adjacent-group cartesian options.
+cd "$tmp_dir"
+mkcd 'lvl/{a,b}{1,2}' 3
+assert_eq "$PWD" "$tmp_dir/lvl/b1"
+
+# Test 15: escaped comma inside a brace group is a literal comma in the name.
+cd "$tmp_dir"
+mkcd 'esc/{a\,b,c}'
+assert_dir "$tmp_dir/esc/a,b"
+assert_dir "$tmp_dir/esc/c"
+assert_eq "$PWD" "$tmp_dir/esc/a,b"
+
+# Test 16: absolute path input works.
+cd "$tmp_dir"
+mkcd "$tmp_dir/abs/{a,b}"
+assert_dir "$tmp_dir/abs/a"
+assert_dir "$tmp_dir/abs/b"
+assert_eq "$PWD" "$tmp_dir/abs/a"
+
+# Test 17: multi-level dot suffix applies after index selection.
+cd "$tmp_dir"
+mkcd 'multi/{a,b}/x/{y,z}' 2,2 ../..
+assert_eq "$PWD" "$tmp_dir/multi/b"
+
+# Test 18: plain single-directory mkcd.
+cd "$tmp_dir"
+mkcd plaindir
+assert_dir "$tmp_dir/plaindir"
+assert_eq "$PWD" "$tmp_dir/plaindir"
+
+# Test 19: split-form index spec (trailing number as a separate arg).
+cd "$tmp_dir"
+mkcd 'split/{a,b}/ok/{first,second}' 1, 2
+assert_eq "$PWD" "$tmp_dir/split/a/ok/second"
+
 print -- "All mkcd tests passed."
