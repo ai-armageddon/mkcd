@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test (zsh on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zsh + shellcheck (Linux)
+        run: sudo apt-get update && sudo apt-get install -y zsh shellcheck
+        if: runner.os == 'Linux'
+
+      - name: Run test suite
+        run: zsh ./test_mkcd.zsh
+
+      - name: Lint shell scripts
+        run: shellcheck install.sh uninstall.sh
+        if: runner.os == 'Linux'
+
+      - name: Install smoke test
+        run: |
+          ./install.sh --prefix "$RUNNER_TEMP/mkcd" --rc-file "$RUNNER_TEMP/testrc" --shell zsh
+          zsh -c 'source "$RUNNER_TEMP/testrc" && mkcd "$RUNNER_TEMP/smoke/{a,b}" && [[ "$PWD" == "$RUNNER_TEMP/smoke/a" ]] && echo "install smoke test OK"'
+
+      - name: Uninstall smoke test
+        run: |
+          ./uninstall.sh --prefix "$RUNNER_TEMP/mkcd" --rc-file "$RUNNER_TEMP/testrc" --shell zsh --yes
+          [[ ! -f "$RUNNER_TEMP/mkcd/mkcd.zsh" ]] && echo "uninstall smoke test OK"
